@@ -37,25 +37,14 @@ function productionBadge(s){if(!s.user||!['Admin','SuperAdmin'].includes(s.user.
 async function verifyProductionDatabase(){
   const e=document.getElementById('prodStatus');
   if(!e)return;
-  e.innerHTML='<b>Checking production database…</b><br><span class="muted">Verifying your Supabase connection.</span>';
+  e.innerHTML='<b>Checking production database…</b><br><span class="muted">Verifying the DIS Academy production API.</span>';
   try{
-    const cfg=supaCfg();
-    const token=sessionStorage.getItem('dis_access_token');
-    let source='server';
-    if(cfg?.url&&cfg?.key&&token){
-      await supaFetch('/rest/v1/rpc/dis_academy_ensure_profile',{method:'POST',body:'{}'}).catch(async err=>{
-        // Older repaired databases may not yet have the profile bridge. The
-        // state RPC is still a valid production check when the profile exists.
-        if(!/function .*does not exist|PGRST202|schema cache/i.test(err.message||''))throw err;
-      });
-      await directCloudGet();
-      source='Supabase';
-    }else{
-      const d=await productionStatus();
-      if(!d.connected)throw new Error(d.message||'Production database could not be verified.');
-    }
+    // Production status must be authoritative from the Render API.
+    // Do not let a direct Supabase check override a successful server check.
+    const d=await productionStatus();
+    if(!d.connected)throw new Error(d.message||'Production database could not be verified.');
     const now=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    e.innerHTML=`<b>Production database: CONNECTED</b> — ${source} is responding.<br><span class="muted">Verified ${esc(now)}.</span> <button class="btn alt" style="margin-left:8px" onclick="verifyProductionDatabase()">Refresh</button>`;
+    e.innerHTML=`<b>Production database: CONNECTED</b> — Production API and database are responding.<br><span class="muted">Verified ${esc(now)}.</span> <button class="btn alt" style="margin-left:8px" onclick="verifyProductionDatabase()">Refresh</button>`;
   }catch(err){
     e.innerHTML=`<b>Production database: NOT CONNECTED</b> — ${esc(err.message||'Connection could not be verified.')} <button class="btn alt" style="margin-left:8px" onclick="verifyProductionDatabase()">Retry</button>`;
   }
