@@ -1,0 +1,7 @@
+{
+  "name": "dis-academy-web-frontend",
+  "version": "2.2.4",
+  "private": true,
+  "engines": {"node": ">=20"},
+  "scripts": {"start": "node server.js"}
+}

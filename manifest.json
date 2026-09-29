@@ -1,0 +1,16 @@
+{
+  "name": "DIS Academy",
+  "short_name": "DIS Academy",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "theme_color": "#0b1f3a",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "description": "DIS Academy - academic management, learning and school administration powered by SSTRYBE"
+}
