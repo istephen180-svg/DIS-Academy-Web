@@ -37,14 +37,25 @@ function productionBadge(s){if(!s.user||!['Admin','SuperAdmin'].includes(s.user.
 async function verifyProductionDatabase(){
   const e=document.getElementById('prodStatus');
   if(!e)return;
-  e.innerHTML='<b>Checking production database…</b><br><span class="muted">Verifying the DIS Academy production API.</span>';
+  e.innerHTML='<b>Checking production database…</b><br><span class="muted">Verifying your Supabase connection.</span>';
   try{
-    // Production status must be authoritative from the Render API.
-    // Do not let a direct Supabase check override a successful server check.
-    const d=await productionStatus();
-    if(!d.connected)throw new Error(d.message||'Production database could not be verified.');
+    const cfg=supaCfg();
+    const token=sessionStorage.getItem('dis_access_token');
+    let source='server';
+    if(cfg?.url&&cfg?.key&&token){
+      await supaFetch('/rest/v1/rpc/dis_academy_ensure_profile',{method:'POST',body:'{}'}).catch(async err=>{
+        // Older repaired databases may not yet have the profile bridge. The
+        // state RPC is still a valid production check when the profile exists.
+        if(!/function .*does not exist|PGRST202|schema cache/i.test(err.message||''))throw err;
+      });
+      await directCloudGet();
+      source='Supabase';
+    }else{
+      const d=await productionStatus();
+      if(!d.connected)throw new Error(d.message||'Production database could not be verified.');
+    }
     const now=new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    e.innerHTML=`<b>Production database: CONNECTED</b> — Production API and database are responding.<br><span class="muted">Verified ${esc(now)}.</span> <button class="btn alt" style="margin-left:8px" onclick="verifyProductionDatabase()">Refresh</button>`;
+    e.innerHTML=`<b>Production database: CONNECTED</b> — ${source} is responding.<br><span class="muted">Verified ${esc(now)}.</span> <button class="btn alt" style="margin-left:8px" onclick="verifyProductionDatabase()">Refresh</button>`;
   }catch(err){
     e.innerHTML=`<b>Production database: NOT CONNECTED</b> — ${esc(err.message||'Connection could not be verified.')} <button class="btn alt" style="margin-left:8px" onclick="verifyProductionDatabase()">Retry</button>`;
   }
@@ -145,7 +156,7 @@ async function doLogin(){let u=document.getElementById('u').value.trim(),p=docum
 
 async function logout(){
   try{await api('/api/logout',{method:'POST'});}catch(e){console.warn('DIS Academy server logout:',e.message||e)}
-  sessionStorage.removeItem('dis_server_access_token');sessionStorage.removeItem('dis_access_token');
+  sessionStorage.removeItem('dis_server_access_token');
   const cfg=supaCfg();
   const token=sessionStorage.getItem('dis_access_token');
   try{
@@ -246,7 +257,7 @@ async function uploadDocument(file,entityType,entityId){
  const d=await api('/api/documents/upload',{method:'POST',body:JSON.stringify({name:file.name,size:file.size,mime:file.type||'application/vnd.openxmlformats-officedocument.wordprocessingml.document',entityType,entityId,data})});
  s.documents=s.documents||[];s.documents=s.documents.filter(x=>!(x.entityType===entityType&&x.entityId===entityId));s.documents.unshift(d.document);save(s);return d.document;
 }
-async function downloadDocument(id){try{const base=(window.DIS_API_BASE_URL||localStorage.getItem('DIS_API_BASE_URL')||'').trim().replace(/\/$/,''); if(!base) throw new Error('DIS Academy production API URL is not configured.');const token=sessionStorage.getItem('dis_server_access_token')||sessionStorage.getItem('dis_access_token')||'';const r=await fetch(base+'/api/documents/download/'+encodeURIComponent(id),{credentials:'include',headers:{'X-DIS-App':'android-2.2.4',...(token?{Authorization:`Bearer ${token}`}:{})}});if(!r.ok)throw new Error((await r.text())||('HTTP '+r.status));const blob=await r.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=(r.headers.get('Content-Disposition')?.match(/filename=\"?([^\"]+)/i)?.[1]||'DIS-Academy-document.docx');a.target='_blank';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){alert(e.message||'Unable to download document.')}}
+async function downloadDocument(id){try{const base=(window.DIS_API_BASE_URL||localStorage.getItem('DIS_API_BASE_URL')||'').trim().replace(/\/$/,''); if(!base) throw new Error('DIS Academy production API URL is not configured.');const token=sessionStorage.getItem('dis_server_access_token')||'';const r=await fetch(base+'/api/documents/download/'+encodeURIComponent(id),{credentials:'include',headers:{'X-DIS-App':'android-2.2.4',...(token?{Authorization:`Bearer ${token}`}:{})}});if(!r.ok)throw new Error((await r.text())||('HTTP '+r.status));const blob=await r.blob();const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=(r.headers.get('Content-Disposition')?.match(/filename=\"?([^\"]+)/i)?.[1]||'DIS-Academy-document.docx');a.target='_blank';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);}catch(e){alert(e.message||'Unable to download document.')}}
 function refreshUploadRecords(){const type=document.getElementById('upType')?.value,sel=document.getElementById('upRecord');if(!sel)return;const s=state(),arr=type==='assessment'?s.assessments||[]:s.assignments||[];sel.innerHTML=arr.filter(x=>!isArchived(x)).map(x=>`<option value="${esc(x.id)}">${esc(x.title)}</option>`).join('')||'<option value="">No records available</option>'}
 async function uploadFromCentre(){const type=document.getElementById('upType')?.value,id=document.getElementById('upRecord')?.value,f=document.getElementById('upFile')?.files?.[0],box=document.getElementById('uploadStatus');if(!id)return alert('Select an assessment or assignment.');if(!f)return alert('Choose a Word document first.');if(box){box.style.display='block';box.textContent='Uploading…'}try{await uploadDocument(f,type,id);if(box)box.textContent='Document uploaded successfully. It can now be opened/downloaded from the relevant assessment or assignment.';uploads(state())}catch(e){if(box)box.textContent='Upload failed: '+(e.message||e)}}
 
@@ -314,8 +325,10 @@ function refreshAccountProfileFields(){const role=document.getElementById('acctR
  else {box.innerHTML=`<label>Staff record (optional)</label><select id="acctStaff" class="input"><option value="">Create login without linking a staff record yet</option>${activeItems(s.staff).filter(x=>['Teacher','HOD','Bursar','Staff'].includes(x.role)).map(x=>`<option value="${esc(x.id)}">${esc(x.name)} — ${esc(x.role)}</option>`).join('')}</select>`}
 }
 async function createAccount(){let s=state();if(!guard(s,'accounts.manage'))return;const name=document.getElementById('acctName').value.trim(),email=document.getElementById('acctEmail').value.trim().toLowerCase(),role=document.getElementById('acctRole').value,method=document.getElementById('acctMethod').value;if(!name||!/^\S+@\S+\.\S+$/.test(email))return alert('Enter a valid name and email address.');let meta={name,role,schoolId:s.user.schoolId||'DIS'};if(role==='Student'){meta.studentId=document.getElementById('acctStudent')?.value;if(!meta.studentId)return alert('Select the student record.');}else if(role==='Parent'){meta.childIds=selectedValues('acctChildren');if(!meta.childIds.length)return alert('Select at least one child.');}else{meta.staffId=document.getElementById('acctStaff')?.value||null;}
+ const apiToken=sessionStorage.getItem('dis_server_access_token')||sessionStorage.getItem('dis_access_token')||'';
+ if(!apiToken)return alert('Your administrator session has expired. Please sign in again before creating an account.');
  const button=document.querySelector('#acctTempWrap')?.parentElement?.querySelector('button.btn'); if(button){button.disabled=true;button.textContent=method==='invite'?'Sending invitation…':'Creating account…';} try{let d;if(method==='invite'){d=await api('/api/admin/invite-user',{method:'POST',body:JSON.stringify({email,name,role,meta,id:role==='Student'?meta.studentId:(meta.staffId||undefined)})});}else{const password=document.getElementById('acctTemp').value;if(password.length<8)return alert('Temporary password must contain at least 8 characters.');d=await api('/api/admin/provision-user',{method:'POST',body:JSON.stringify({email,password,name,role,meta,id:role==='Student'?meta.studentId:(meta.staffId||undefined)})});}
- let u={id:d.user?.id||meta.studentId||meta.staffId||('AUTH-'+Date.now()),username:email.split('@')[0],name,email,role,status:'Active',authUserId:d.user?.authUserId,studentId:meta.studentId,childIds:meta.childIds,staffId:meta.staffId};s.users=s.users||[];s.users=s.users.filter(x=>x.email!==email);s.users.push(u);if(role==='Student'){const st=s.students.find(x=>x.id===meta.studentId);if(st)st.userId=u.id;}if(role==='Parent'){for(const cid of meta.childIds){const st=s.students.find(x=>x.id===cid);if(st)st.parentUser=u.id;}}save(s);alert(method==='invite'?'Invitation sent. The recipient should use the email to set their password.':'Account created. Give the recipient the temporary password and ask them to change it after signing in.');accounts(s);
+ let u={id:d.user?.id||meta.studentId||meta.staffId||('AUTH-'+Date.now()),username:email.split('@')[0],name,email,role,status:'Active',authUserId:d.user?.authUserId||d.user?.id||d.authUserId,studentId:meta.studentId,childIds:meta.childIds,staffId:meta.staffId};s.users=s.users||[];s.users=s.users.filter(x=>x.email!==email);s.users.push(u);if(role==='Student'){const st=s.students.find(x=>x.id===meta.studentId);if(st)st.userId=u.id;}if(role==='Parent'){for(const cid of meta.childIds){const st=s.students.find(x=>x.id===cid);if(st)st.parentUser=u.id;}}save(s);alert(method==='invite'?'Invitation sent. The recipient should use the email to set their password.':'Account created. Give the recipient the temporary password and ask them to change it after signing in.');accounts(s);
  }catch(e){const msg=e?.message||'Unable to create account.'; alert(msg==='Failed to fetch' ? 'DIS Academy could not reach the production API. Confirm that the DIS Academy API URL is configured in the app and that the server is online. No account was confirmed as created.' : msg);} finally {const button=document.querySelector('#acctTempWrap')?.parentElement?.querySelector('button.btn'); if(button){button.disabled=false;button.textContent='Create account';}}}
 
 function permissions(s){if(!guard(s,'permissions.manage'))return home();let roles=Object.keys(s.permissions).filter(r=>r!=='SuperAdmin');let perms=[...new Set(Object.values(s.permissions).flat().filter(x=>x!=='*'))];shell(s,'Role & Permission Management',nav(s,'Permissions')+`<div class="card"><p><b>Deny by default.</b> Changes affect what each role can access. Server-side enforcement is required when this prototype is connected to the production API.</p><table class="table"><tr><th>Permission</th>${roles.map(r=>`<th>${r}</th>`).join('')}</tr>${perms.map(p=>`<tr><td>${p}</td>${roles.map(r=>`<td><input type="checkbox" ${s.permissions[r]?.includes(p)?'checked':''} onchange="togglePerm('${r}','${p}',this.checked)"></td>`).join('')}</tr>`).join('')}</table></div>`)}
