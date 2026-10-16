@@ -12,3 +12,6 @@
 
 /* DIS Academy 2.2 Academic Management */
 .question-row{border-left:4px solid #0b1f3a}.attendance-row{padding:6px 0;border-bottom:1px solid #eef1f5}.table td .btn{margin:2px}.upload-card{border:1px dashed #b8c2d1}
+
+/* Accessible password visibility control */
+.password-wrap{display:flex;align-items:center;gap:8px;width:100%;position:relative}.password-wrap .input{flex:1;min-width:0}.password-toggle{flex:0 0 44px;min-height:44px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;font-size:18px;cursor:pointer}.password-toggle:focus-visible{outline:3px solid #d4af37;outline-offset:2px}
