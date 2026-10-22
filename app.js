@@ -2,7 +2,7 @@ const KEY='dis_academy_prod_v2_0';
 const LEGACY_KEY='dis_academy_prod_v1';
 const RECOVERY_KEY='dis_academy_recovery_2_1_5';
 let serverOnline=false;
-async function api(path,options={}){try{const base=(window.DIS_API_BASE_URL||localStorage.getItem('DIS_API_BASE_URL')||'').trim().replace(/\/$/,''); if(!base) throw new Error('DIS Academy production API URL is not configured.');const token=sessionStorage.getItem('dis_server_access_token')||sessionStorage.getItem('dis_access_token')||'';const r=await fetch(base+path,{credentials:'include',headers:{'Content-Type':'application/json','X-DIS-App':'android-2.2.4',...(token?{Authorization:`Bearer ${token}`}:{}) ,...(options.headers||{})},...options});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||('HTTP '+r.status));serverOnline=true;return d}catch(e){serverOnline=false;throw e}}
+async function api(path,options={}){try{const base=(window.DIS_API_BASE_URL||localStorage.getItem('DIS_API_BASE_URL')||'').trim().replace(/\/$/,''); if(!base) throw new Error('DIS Academy production API URL is not configured.');const token=sessionStorage.getItem('dis_server_access_token')||sessionStorage.getItem('dis_access_token')||'';const r=await fetch(base+path,{credentials:'include',headers:{'Content-Type':'application/json','X-DIS-App':'android-2.2.4',...(token?{Authorization:`Bearer ${token}`}:{}) ,...(options.headers||{})},...options});const d=await r.json().catch(()=>({}));if(!r.ok){console.error('[DIS Academy API request failed]',{path,status:r.status,error:d.error||null,detail:d.detail||null});throw new Error(d.error||('HTTP '+r.status));}serverOnline=true;return d}catch(e){serverOnline=false;throw e}}
 // Dedicated student/class record persistence is independent of the general application snapshot.
 let disStateSaveQueue=Promise.resolve();
 let disStateSaveSequence=0;
@@ -18,7 +18,7 @@ async function syncState(s){
   }
   const result=await api('/api/state',{method:'PUT',body:JSON.stringify({state:{...stable,user:null},clientSaveSequence:sequence})});
   if(!result||result.ok!==true||!String(result.persistence||'').includes('dedicated-student-records'))throw new Error('The production database did not confirm this save.');
-  serverOnline=true;return result;
+  serverOnline=true;if(result.relationalSync&&result.relationalSync.ok===false)console.warn('[DIS Academy] The application snapshot was saved, but a secondary relational sync failed. The save is committed; do not retry it. Check the API deployment logs for the underlying database error.');return result;
  });
  disStateSaveQueue=job.catch(()=>{});
  try{return await job}catch(e){serverOnline=false;throw e}

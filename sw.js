@@ -1,4 +1,4 @@
-const CACHE='dis-academy-student-records-v1-20261017';
+const CACHE='dis-academy-student-records-v2-20261017';
 const ASSETS=['./','./index.html','./styles.css','./app.js','./api-config.js','./manifest.json','./icon.svg','./dis-logo.jpg'];
 const NETWORK_FIRST=new Set(['app.js','api-config.js','index.html','sw.js','styles.css','manifest.json']);
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(ASSETS)).then(()=>self.skipWaiting())));
